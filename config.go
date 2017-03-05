@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -68,6 +69,14 @@ func init() {
 		}
 
 		field.SetString(env)
+	}
+
+	// Add default scheme if host does not contain one
+	// Do not admit opaque URLs, since it's common practice
+	// to config Host as a simple host:port like "localhost:8080"
+	URL, err := url.Parse(Config.Host)
+	if err == nil && (URL.Scheme == "" || URL.Opaque != "") {
+		Config.Host = fmt.Sprintf("%s://%s", Config.Scheme, Config.Host)
 	}
 
 	if port := os.Getenv("PORT"); port != "" {

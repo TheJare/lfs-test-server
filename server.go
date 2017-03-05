@@ -130,11 +130,7 @@ func (v *RequestVars) internalLink(subpath string) string {
 
 	path += fmt.Sprintf("/%s/%s", subpath, v.Oid)
 
-	if Config.IsHTTPS() {
-		return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
-	}
-
-	return fmt.Sprintf("http://%s%s", Config.Host, path)
+	return fmt.Sprintf("%s%s", Config.Host, path)
 }
 
 func (v *RequestVars) tusLink() string {
@@ -148,11 +144,7 @@ func (v *RequestVars) tusLink() string {
 func (v *RequestVars) VerifyLink() string {
 	path := fmt.Sprintf("/verify/%s", v.Oid)
 
-	if Config.IsHTTPS() {
-		return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
-	}
-
-	return fmt.Sprintf("http://%s%s", Config.Host, path)
+	return fmt.Sprintf("%s%s", Config.Host, path)
 }
 
 // link provides a structure used to build a hypermedia representation of an HTTP link.
