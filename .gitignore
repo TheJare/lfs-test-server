@@ -1,4 +1,5 @@
-dist
+dist/
 lfs-test-server
+lfs-test-server.exe
 lfs-test-server-out.*
 lfs-test-server-release.*

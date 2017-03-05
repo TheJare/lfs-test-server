@@ -84,6 +84,144 @@ func TestPuthWithoutAuth(t *testing.T) {
 	}
 }
 
+func TestLocks(t *testing.T) {
+	setupMeta()
+	defer teardownMeta()
+
+	list, _, pending, err := metaStoreTest.LockList("", 0, 100)
+	if err != nil {
+		t.Errorf("expected 1) LockList to succeed, got : %s", err)
+	}
+	if len(list) > 0 {
+		t.Errorf("expected 1) list to be empty, got : %d elements", len(list))
+	}
+	if pending {
+		t.Errorf("expected 5) list to not have any items pending")
+	}
+
+	lock1, err := metaStoreTest.LockAdd("/test", "owner")
+	if err != nil {
+		t.Errorf("expected 2) LockAdd to succeed, got : %s", err)
+	}
+	if lock1.Path != "/test" {
+		t.Errorf("expected 2) path to be '/test', got : %s", lock1.Path)
+	}
+	if lock1.Owner != "owner" {
+		t.Errorf("expected 2) owner to be 'owner', got : %s", lock1.Owner)
+	}
+
+	lock2, err := metaStoreTest.LockAdd("/test2", "owner")
+	if err != nil {
+		t.Errorf("expected 3) LockAdd to succeed, got : %s", err)
+	}
+
+	lock, err := metaStoreTest.LockAdd("/test", "owner")
+	if err == nil {
+		t.Errorf("expected 4) LockAdd to fail, got : %s", lock.Path)
+	}
+
+	list, _, pending, err = metaStoreTest.LockList("", 0, 100)
+	if err != nil {
+		t.Errorf("expected 5) LockList to succeed, got : %s", err)
+	}
+	if len(list) != 2 {
+		t.Errorf("expected 5) list to contain 2 elements, got : %d elements", len(list))
+	}
+	if pending {
+		t.Errorf("expected 5) list to not have any items pending")
+	}
+	if !((list[0].Path == "/test" && list[1].Path == "/test2") ||
+		(list[0].Path == "/test2" && list[1].Path == "/test")) {
+		t.Errorf("expected 5) list to have two distinct paths, got %s and %s", list[0].Path, list[1].Path)
+	}
+
+	list1, cursor, pending, err := metaStoreTest.LockList("", 0, 1)
+	if err != nil {
+		t.Errorf("expected 6) LockList to succeed, got : %s", err)
+	}
+	if len(list1) != 1 {
+		t.Errorf("expected 6) list to contain 1 element, got : %#v elements", list1)
+	}
+	if !pending {
+		t.Errorf("expected 6) list to have items pending")
+	}
+	if cursor != 2 {
+		t.Errorf("expected 6) cursor to point to 2 but got %d", cursor)
+	}
+
+	list2, _, pending, err := metaStoreTest.LockList("", cursor, 1)
+	if err != nil {
+		t.Errorf("expected 7) LockList to succeed, got : %s", err)
+	}
+	if len(list2) != 1 {
+		t.Errorf("expected 6) list to contain 1 element, got : %#v elements", list2)
+	}
+	if pending {
+		t.Errorf("expected 7) list to not have items pending")
+	}
+
+	if !((list1[0].Path == "/test" && list2[0].Path == "/test2") ||
+		(list1[0].Path == "/test2" && list2[0].Path == "/test")) {
+		t.Errorf("expected 6,7) lists to have two distinct paths, got %s and %s", list1[0].Path, list2[0].Path)
+	}
+
+	list, _, pending, err = metaStoreTest.LockList("/test2", 0, 100)
+	if err != nil {
+		t.Errorf("expected 8) LockList to succeed, got : %s", err)
+	}
+	if len(list) != 1 {
+		t.Errorf("expected 8) list to have 1 elements, got : %d elements", len(list))
+	}
+
+	list, _, pending, err = metaStoreTest.LockList("/nothing", 0, 100)
+	if err != nil {
+		t.Errorf("expected 9) LockList to succeed, got : %s", err)
+	}
+	if len(list) > 0 {
+		t.Errorf("expected 9) list to be empty, got : %d elements", len(list))
+	}
+
+	lock, err = metaStoreTest.LockDelete(lock2.ID, "wrong", false)
+	if err == nil {
+		t.Errorf("expected 10) LockDelete to fail, got : %s", lock.Path)
+	}
+
+	lock, err = metaStoreTest.LockDelete(lock2.ID, "owner", false)
+	if err != nil {
+		t.Errorf("expected 11) LockDelete to succeed, got : %s", err)
+	}
+
+	list, _, _, err = metaStoreTest.LockList("/test2", 0, 100)
+	if err != nil {
+		t.Errorf("expected 12) LockList to succeed, got : %s", err)
+	}
+	if len(list) > 0 {
+		t.Errorf("expected 12) list to be empty, got : %d elements", len(list))
+	}
+
+	list, _, _, err = metaStoreTest.LockList("/test", 0, 100)
+	if err != nil {
+		t.Errorf("expected 13) LockList to succeed, got : %s", err)
+	}
+	if len(list) != 1 {
+		t.Errorf("expected 13) list to have 1 elements, got : %d elements", len(list))
+	}
+
+	lock, err = metaStoreTest.LockDelete(lock1.ID, "wrong", true)
+	if err != nil {
+		t.Errorf("expected 14) LockDelete to succeed, got : %s", err)
+	}
+
+	list, _, _, err = metaStoreTest.LockList("", 0, 100)
+	if err != nil {
+		t.Errorf("expected 15) LockList to succeed, got : %s", err)
+	}
+	if len(list) > 0 {
+		t.Errorf("expected 15) list to be empty, got : %d elements", len(list))
+	}
+
+}
+
 func setupMeta() {
 	store, err := NewMetaStore("test-meta-store.db")
 	if err != nil {
