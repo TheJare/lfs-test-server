@@ -13,7 +13,7 @@ import (
 const (
 	contentMediaType = "application/vnd.git-lfs"
 	metaMediaType    = contentMediaType + "+json"
-	version          = "0.5.0-TheJare"
+	version          = "0.5.0-rc1"
 )
 
 var (
