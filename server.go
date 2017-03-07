@@ -140,6 +140,7 @@ func NewApp(content *ContentStore, meta *MetaStore) *App {
 	r.HandleFunc("/verify/{oid}", app.VerifyHandler).Methods("POST")
 
 	app.addMgmt(r)
+	app.addLocks(r)
 
 	app.router = r
 

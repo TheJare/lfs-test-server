@@ -23,6 +23,16 @@ var (
 	errNoBucket       = errors.New("Bucket not found")
 	errObjectNotFound = errors.New("Object not found")
 
+	errEmptyPath       = errors.New("Path is empty")
+	errEmptyUser       = errors.New("User is empty")
+	errDuplicateObject = errors.New("Duplicate object")
+	errUnauthorized    = errors.New("User not allowed")
+)
+
+var (
+	usersBucket   = []byte("users")
+	objectsBucket = []byte("objects")
+
 	// Two buckets to store locks. One for id lookups,
 	// and one for path lookups/ Always in sync (?)
 	// TODO study:
@@ -32,13 +42,6 @@ var (
 	//   updates in between LockList requests. This means
 	//   we will run out of locks at 2^64. Need way to find
 	//   next unused lock id after wraparound!
-	errDuplicateObject = errors.New("Duplicate object")
-	errUnauthorized    = errors.New("User not allowed")
-)
-
-var (
-	usersBucket     = []byte("users")
-	objectsBucket   = []byte("objects")
 	locksBucket     = []byte("locks")
 	lockPathsBucket = []byte("lockPaths")
 )
@@ -295,7 +298,10 @@ func (s *MetaStore) authenticate(authorization string) bool {
 	if ok {
 		return true
 	}
+	return s.ValidateUser(user, password)
+}
 
+func (s *MetaStore) ValidateUser(user, password string) bool {
 	value := ""
 
 	s.db.View(func(tx *bolt.Tx) error {
@@ -343,6 +349,12 @@ func itob(v uint64) []byte {
 
 // LockAdd adds a lock for a given filename with a given owner
 func (s *MetaStore) LockAdd(filepath string, owner string) (*MetaLock, error) {
+	if filepath == "" {
+		return nil, errEmptyPath
+	}
+	if owner == "" {
+		return nil, errEmptyUser
+	}
 
 	var existingMeta MetaLock
 	err := s.db.Update(func(tx *bolt.Tx) error {
@@ -354,15 +366,11 @@ func (s *MetaStore) LockAdd(filepath string, owner string) (*MetaLock, error) {
 		// Check if it exists first
 		value := pb.Get([]byte(filepath))
 		if len(value) != 0 {
-			// Not specified in the API: what to do if lock
-			// already exists for this same user. Grant or error?
-			// Default to error for now
-			// dec := gob.NewDecoder(bytes.NewBuffer(value))
-			// err := dec.Decode(&meta)
-
-			// if err != nil {
-			// 	return err
-			// }
+			dec := gob.NewDecoder(bytes.NewReader(value))
+			err := dec.Decode(&existingMeta)
+			if err != nil {
+				return err
+			}
 			return errDuplicateObject
 		}
 
@@ -371,7 +379,7 @@ func (s *MetaStore) LockAdd(filepath string, owner string) (*MetaLock, error) {
 		if err != nil {
 			return err
 		}
-		now := time.Now().String()
+		now := time.Now().UTC().Format(time.RFC3339)
 
 		var buf bytes.Buffer
 		enc := gob.NewEncoder(&buf)
@@ -457,6 +465,34 @@ func (s *MetaStore) LockDelete(id uint64, owner string, force bool) (*MetaLock, 
 		return nil, err
 	}
 
+	return &meta, nil
+}
+
+// LockGet tries to find a lock by its id
+func (s *MetaStore) LockGet(id uint64) (*MetaLock, error) {
+	var meta MetaLock
+	err := s.db.View(func(tx *bolt.Tx) error {
+		lb := tx.Bucket(locksBucket)
+		if lb == nil {
+			return errNoBucket
+		}
+
+		idBytes := itob(id)
+		value := lb.Get(idBytes)
+		if len(value) == 0 {
+			return errObjectNotFound
+		}
+
+		dec := gob.NewDecoder(bytes.NewBuffer(value))
+		err := dec.Decode(&meta)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
 	return &meta, nil
 }
 
